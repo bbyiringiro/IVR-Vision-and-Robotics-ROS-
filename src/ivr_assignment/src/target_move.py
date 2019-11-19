@@ -47,6 +47,18 @@ def move():
     robot_joint6_pub.publish(joint6)
     rate.sleep()
 
+#Forward kinematics
+#    sin = [0]
+#    cos = [0]
+#    for angle in angles:
+#        sin.append(np.sin(angle))
+#        cos.append(np.cos(angle))
+#    x = -2*sin[2]*sin[4] - 2*cos[2]*sin[3]*cos[4] +  3*cos[2]*sin[3]
+#    y = 2*cos[1]*cos[2]*sin[4] - 2*cos[1]*sin[2]*sin[3]*sin[4] 
+#    - 2*sin[1]*cos[3]*sin[4] + 3*cos[1]*sin[2]*sin[3] - 3*sin[1]*cos[3]
+#    z = 2*sin[1]*cos[2]*sin[4] + 2*cos[1]*cos[3]*cos[4] 
+#    - 2*sin[1]*sin[2]*sin[3]*cos[4] + 3*sin[1]*sin[2]*sin[3] + 3*cos[1]*cos[3] + 2
+
 
 
 # run the code if the node is called
