@@ -103,7 +103,67 @@ class RobotController3D():
         return np.array([cx, cy, cz])
 
     def detect_target(self, imageXY, imageYZ):
-        pass
+        lower_orange = np.array([10, 40, 90],np.uint8)
+        upper_orange = np.array([27, 255, 255],np.uint8)
+        imageXY = cv2.cvtColor(imageXY,cv2.COLOR_BGR2HSV)
+        imageYZ = cv2.cvtColor(imageYZ,cv2.COLOR_BGR2HSV)
+
+        mask_xy = cv2.inRange(imageXY, lower_orange, upper_orange)
+        mask_yz = cv2.inRange(imageYZ, lower_orange, upper_orange)
+
+
+        contours_xy, _ = cv2.findContours(mask_xy, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        contours_yz, _ = cv2.findContours(mask_yz, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        try:
+            if (len(contours_xy) == 2):
+                sphere = contours_xy[1]
+            else:
+                sphere = contours_xy[0]
+            if(cv2.contourArea(sphere)==0):
+                M=sphere[0][0]
+                cX = M[0]
+                cZ_1 = M[1]
+            else:
+                M = cv2.moments(sphere)
+                cX = int(M["m10"] / M["m00"])
+                cZ_1 = int(M["m01"] / M["m00"])     
+        except:
+            print(len(contours_xy))
+            cX = 0
+            cZ_1 = 0
+
+            
+
+        try:
+            if (len(contours_yz) == 2):
+                sphere = contours_yz[1]
+            else:
+                sphere = contours_yz[0]
+            if(cv2.contourArea(sphere)==0):
+                M=sphere[0][0]
+                cY = M[0]
+                cZ_2 = M[1]
+            else:
+                M = cv2.moments(sphere)
+                cY = int(M["m10"] / M["m00"])
+                cZ_2 = int(M["m01"] / M["m00"]) 
+        except Exception as err:
+            print(len(contours_yz))
+            print(err)
+            print (M["m10"])
+            cY=0
+            cZ_2=0
+        cZ=0
+        if(cZ_1 !=0 and cZ_2):
+            cZ = (cZ_1 + cZ_2)/2
+        elif (cZ_1 !=0):
+            cZ = cZ_1
+        else:
+            cZ = cZ_2
+
+
+        return np.array([cX, cY, cZ])
+
 
     # detect robot end-effector from the image
     def detect_end_effector(self,imageXY, imageYZ):
@@ -127,23 +187,23 @@ class RobotController3D():
             self.cv_image2 = self.bridge.imgmsg_to_cv2(cam2_data, "bgr8")
         except CvBridgeError as e:
             print(e)
-        corr = self.detect_red(self.cv_image1, self.cv_image2)
-        print ("red: x {}, y {}, z {}".format(corr[0], corr[1], corr[2]))
+        # corr = self.detect_red(self.cv_image1, self.cv_image2)
+        # print ("red: x {}, y {}, z {}".format(corr[0], corr[1], corr[2]))
 
-        corr = self.detect_green(self.cv_image1, self.cv_image2)
-        print ("green:x {}, y {}, z {}".format(corr[0], corr[1], corr[2]))
+        # corr = self.detect_green(self.cv_image1, self.cv_image2)
+        # print ("green:x {}, y {}, z {}".format(corr[0], corr[1], corr[2]))
 
-        corr = self.detect_blue(self.cv_image1, self.cv_image2)
-        print ("blue:x {}, y {}, z {}".format(corr[0], corr[1], corr[2]))
+        # corr = self.detect_blue(self.cv_image1, self.cv_image2)
+        # print ("blue:x {}, y {}, z {}".format(corr[0], corr[1], corr[2]))
 
-        corr = self.detect_yellow(self.cv_image1, self.cv_image2)
-        print ("yellow:x {}, y {}, z {}".format(corr[0], corr[1], corr[2]))
+        # corr = self.detect_yellow(self.cv_image1, self.cv_image2)
+        # print ("yellow:x {}, y {}, z {}".format(corr[0], corr[1], corr[2]))
 
+        print(self.detect_target(self.cv_image1, self.cv_image2))
 
-
-        # im1=cv2.imshow('window1', self.cv_image1)
-        # im2=cv2.imshow('window2', self.cv_image2)
-        # cv2.waitKey(1)
+        im1=cv2.imshow('window1', self.cv_image1)
+        im2=cv2.imshow('window2', self.cv_image2)
+        cv2.waitKey(1)
 
     
 
