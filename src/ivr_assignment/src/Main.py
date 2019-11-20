@@ -202,7 +202,7 @@ class RobotController3D():
         joint_pos2 = self.detect_green(imageXZ, imageYZ)
         joint_pos3 = self.detect_red(imageXZ, imageYZ)
         
-        return np.array([joint_pos0, joint_pos1, joint_pos2, joint_pos3])
+        return np.array([joint_pos0, joint_pos1-joint_pos0, joint_pos2-joint_pos0, joint_pos3-joint_pos0])
     
     # detect robot end-effector from the image
     def detect_end_effector(self,imageXY, imageYZ):
@@ -226,17 +226,18 @@ class RobotController3D():
             m = m[0]
             
             F = np.empty((1))
-            F[0] = -2*np.sin(y)*np.sin(m) + 2*np.cos(y)*np.cos(z)*np.cos(m) +3*np.cos(y)*np.cos(z) + 2 - a
+            F[0] = -2*np.sin(y)*np.sin(m) + 2*np.cos(y)*np.cos(z)*np.cos(m) + 3*np.cos(y)*np.cos(z) + 2 - a
 
             return F
         
+        a = self.pixel2meter(self.cv_image1, self.cv_image2)
         joint4_pos = np.array(self.joints_pos[2])
         end_pos = np.array(self.joints_pos[3])
         prev_ang = self.joints_ang
-        k1 = least_squares(x2q_joint4, prev_ang[:3], args = (joint4_pos), 
+        k1 = least_squares(x2q_joint4, prev_ang[:3], args = (joint4_pos/a), 
                           bounds = (np.array(prev_ang[0:3]) - 0.05, np.array(prev_ang[0:3]) + 0.05))
         curr_ang = k1.x
-        k2 = least_squares(x2q_end, prev_ang[3], args = ([end_pos[2], curr_ang[1], curr_ang[2]]), 
+        k2 = least_squares(x2q_end, prev_ang[3], args = ([end_pos[2]/a, curr_ang[1], curr_ang[2]]), 
                           bounds = (prev_ang[3] - 0.05, prev_ang[3] + 0.05))
         curr_ang = np.append(curr_ang, k2.x[0])
         self.joints_ang = curr_ang
