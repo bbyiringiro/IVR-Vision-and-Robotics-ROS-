@@ -24,12 +24,16 @@ class RobotController3D():
         self.image_pub2 = rospy.Publisher("image_topic2",Image, queue_size = 1)
         cam1_sub = message_filters.Subscriber("/camera1/robot/image_raw", Image)
         cam2_sub = message_filters.Subscriber("/camera2/robot/image_raw", Image)
+        self.robot_joint1_pub = rospy.Publisher("/robot/joint1_position_controller/command", Float64, queue_size=10)
+        self.robot_joint2_pub = rospy.Publisher("/robot/joint2_position_controller/command", Float64, queue_size=10)
+        self.robot_joint3_pub = rospy.Publisher("/robot/joint3_position_controller/command", Float64, queue_size=10)
+        self.robot_joint4_pub = rospy.Publisher("/robot/joint4_position_controller/command", Float64, queue_size=10)
         sync = message_filters.TimeSynchronizer([cam1_sub, cam2_sub], 2)
         sync.registerCallback(self.callback)
         self.bridge = CvBridge()
         self.time_previous_step = np.array([rospy.get_time()], dtype='float64') 
-        self.error = np.array([0.0,0.0], dtype='float64')  
-        self.error_d = np.array([0.0,0.0], dtype='float64') 
+        self.error = np.array([0.0,0.0, 0.0], dtype='float64')  
+        self.error_d = np.array([0.0,0.0,0.0], dtype='float64') 
         self.joints_ang = np.array([0.0, 0.0, 0.0, 0.0], dtype='float64') 
         self.joints_pos = np.array([[0.0, 0.0, 0.0],
                                     [0.0, 0.0, 2.0],
@@ -77,20 +81,25 @@ class RobotController3D():
         return np.array([cx, cy, cz])
 
     def detect_red(self,imageXZ,imageYZ):
-        mask_xz = cv2.inRange(imageXZ, (0, 0, 100), (0, 0, 255))
-        mask_yz = cv2.inRange(imageYZ, (0, 0, 100), (0, 0, 255))
+        try:
+            mask_xz = cv2.inRange(imageXZ, (0, 0, 100), (0, 0, 255))
+            mask_yz = cv2.inRange(imageYZ, (0, 0, 100), (0, 0, 255))
 
-        kernel = np.ones((5, 5), np.uint8)
-        mask_xz = cv2.dilate(mask_xz, kernel, iterations=3)
-        mask_yz = cv2.dilate(mask_yz, kernel, iterations=3)
-        M1 = cv2.moments(mask_xz)
-        cx = int(M1['m10'] / M1['m00'])
-        cz = int(M1['m01'] / M1['m00'])
+            kernel = np.ones((5, 5), np.uint8)
+            mask_xz = cv2.dilate(mask_xz, kernel, iterations=3)
+            mask_yz = cv2.dilate(mask_yz, kernel, iterations=3)
+            M1 = cv2.moments(mask_xz)
+            cx = int(M1['m10'] / M1['m00'])
+            cz = int(M1['m01'] / M1['m00'])
 
-        M2 = cv2.moments(mask_yz)
-        cy = int(M2['m10'] / M2['m00'])
-        cz1 = int(M2['m01'] / M2['m00'])
-        cz = (cz+cz1)/2 # take average of Z returned from the two camera
+            M2 = cv2.moments(mask_yz)
+            cy = int(M2['m10'] / M2['m00'])
+            cz1 = int(M2['m01'] / M2['m00'])
+            cz = (cz+cz1)/2 # take average of Z returned from the two camera
+        except:
+            cx=0
+            cy=0
+            cz=0
 
         return np.array([cx, cy, cz])
 
@@ -98,17 +107,22 @@ class RobotController3D():
         mask_xz = cv2.inRange(imageXZ, (0, 100, 0), (0, 255, 0))
         mask_yz = cv2.inRange(imageYZ, (0, 100, 0), (0, 255, 0))
 
-        kernel = np.ones((5, 5), np.uint8)
-        mask_xz = cv2.dilate(mask_xz, kernel, iterations=3)
-        mask_yz = cv2.dilate(mask_yz, kernel, iterations=3)
-        M1 = cv2.moments(mask_xz)
-        cx = int(M1['m10'] / M1['m00'])
-        cz = int(M1['m01'] / M1['m00'])
+        try:
+            kernel = np.ones((5, 5), np.uint8)
+            mask_xz = cv2.dilate(mask_xz, kernel, iterations=3)
+            mask_yz = cv2.dilate(mask_yz, kernel, iterations=3)
+            M1 = cv2.moments(mask_xz)
+            cx = int(M1['m10'] / M1['m00'])
+            cz = int(M1['m01'] / M1['m00'])
 
-        M2 = cv2.moments(mask_yz)
-        cy = int(M2['m10'] / M2['m00'])
-        cz1 = int(M2['m01'] / M2['m00'])
-        cz = (cz+cz1)/2 # take average of Z returned from the two camera
+            M2 = cv2.moments(mask_yz)
+            cy = int(M2['m10'] / M2['m00'])
+            cz1 = int(M2['m01'] / M2['m00'])
+            cz = (cz+cz1)/2 # take average of Z returned from the two camera
+        except:
+            cx=0
+            cy=0
+            cz=0
 
         return np.array([cx, cy, cz])
 
@@ -160,7 +174,7 @@ class RobotController3D():
         except Exception as err:
             print(len(contours_yz))
             print(err)
-            print (M["m10"])
+            # print (M["m10"])
             cY=0
             cZ_2=0
         cZ=0
@@ -224,13 +238,11 @@ class RobotController3D():
         curr_ang = k1.x
         k2 = least_squares(x2q_end, prev_ang[3], args = ([end_pos[2], curr_ang[1], curr_ang[2]]), 
                           bounds = (prev_ang[3] - 0.05, prev_ang[3] + 0.05))
-        curr_ang.append(k2.x[0])
+        curr_ang = np.append(curr_ang, k2.x[0])
         self.joints_ang = curr_ang
         return curr_ang
         
         
-        
-        pass
     def forward_kinematics(self):
         #Forward kinematics
         t1, t2, t3, t4 = sym.symbols('t1 t2 t3 t4')
@@ -247,10 +259,10 @@ class RobotController3D():
         t1, t2, t3, t4 = sym.symbols('t1 t2 t3 t4')
         t = [t1, t2, t3, t4]
         jacobian = np.eye(3, 4)
-        for i in len(FK):
-            for j in len(joint_angles):
+        for i in range(len(FK)):
+            for j in range(len(joint_angles)):
                 expr = sym.diff(FK[i], t[j])
-                jacobian[i][j] = expr.subs([(t1, joint_angles[0]), (t2, joint_angles[1], (t3, joint_angles[2], (t4, joint_angles[3])))])
+                jacobian[i][j] = expr.subs([(t1, joint_angles[0]), (t2, joint_angles[1]), (t3, joint_angles[2]), (t4, joint_angles[3])])
         return jacobian
 
 
@@ -260,9 +272,9 @@ class RobotController3D():
 
     def control_closed(self,imageXY, imageYZ):
         # P gain
-        K_p = np.array([[10,0],[0,10]])
+        K_p = np.array([[1,0,0],[0,1,0], [0,0,1]])
         # D gain
-        K_d = np.array([[0.1,0],[0,0.1]])
+        K_d = np.array([[0.1,0,0.0],[0,0.1,0.0], [0,0.1,0.0]])
         # estimate time step
         cur_time = np.array([rospy.get_time()])
         dt = cur_time - self.time_previous_step
@@ -270,12 +282,12 @@ class RobotController3D():
         # robot end-effector position
         pos = self.detect_end_effector(imageXY, imageYZ)
         # desired trajectory
-        pos_d= self.target_tragectory() 
+        pos_d= self.detect_target(imageXY, imageYZ) 
         # estimate derivative of error
         self.error_d = ((pos_d - pos) - self.error)/dt
         # estimate error
         self.error = pos_d-pos
-        q = self.detect_joint_angles(imageXY, imageYZ) # estimate initial value of joints'
+        q = self.detect_joint_angles() # estimate initial value of joints'
         J_inv = np.linalg.pinv(self.calculate_jacobian(imageXY, imageYZ))  # calculating the psudeo inverse of Jacobian
         dq_d =np.dot(J_inv, ( np.dot(K_d,self.error_d.transpose()) + np.dot(K_p,self.error.transpose()) ) )  # control input (angular velocity of joints)
         q_d = q + (dt * dq_d)  # control input (angular position of joints)
@@ -305,8 +317,31 @@ class RobotController3D():
         im2=cv2.imshow('window2', self.cv_image2)
         cv2.waitKey(1)
         # print(self.detect_end_effector(self.cv_image1, self.cv_image2))
-        self.joints_pos = self.detect_joints_pos()
-        q_d = self.control_closed(cv_image)
+        self.joints_pos = self.detect_joints_pos(self.cv_image1, self.cv_image2)
+        q_d = self.control_closed(self.cv_image1, self.cv_image2)
+
+
+
+        #q_d = self.control_open(cv_image)
+        self.joint1=Float64()
+        self.joint1.data= q_d[0]
+        self.joint2=Float64()
+        self.joint2.data= q_d[1]
+        self.joint3=Float64()
+        self.joint3.data= q_d[2]
+        self.joint4=Float64()
+        self.joint4.data= q_d[3]
+
+
+
+        # Publish the results
+        try: 
+            self.robot_joint1_pub.publish(self.joint1)
+            self.robot_joint2_pub.publish(self.joint2)
+            self.robot_joint3_pub.publish(self.joint3)
+            self.robot_joint4_pub.publish(self.joint4)
+        except CvBridgeError as e:
+            print(e)
     
 
     
