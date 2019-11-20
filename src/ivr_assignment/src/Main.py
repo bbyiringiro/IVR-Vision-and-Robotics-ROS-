@@ -25,8 +25,12 @@ class RobotController3D():
         cam2_sub = message_filters.Subscriber("/camera2/robot/image_raw", Image)
         sync = message_filters.TimeSynchronizer([cam1_sub, cam2_sub], 2)
         sync.registerCallback(self.callback)
-
         self.bridge = CvBridge()
+        self.time_previous_step = np.array([rospy.get_time()], dtype='float64') 
+        self.error = np.array([0.0,0.0], dtype='float64')  
+        self.error_d = np.array([0.0,0.0], dtype='float64') 
+
+        
 
 
     def detect_blue(self,imageXZ,imageYZ):
@@ -163,47 +167,89 @@ class RobotController3D():
 
 
         return np.array([cX, cY, cZ])
+    
+    def pixel2meter(self,imageXY, imageYZ):
+      # Obtain the centre of each coloured blob
+      circle1Pos = self.detect_blue(imageXY, imageYZ)
+      circle2Pos = self.detect_green(imageXY,imageYZ)
+      # find the distance between two circles
+      dist = np.sum((circle1Pos - circle2Pos)**2)
+      return 3 / np.sqrt(dist)
 
 
     # detect robot end-effector from the image
     def detect_end_effector(self,imageXY, imageYZ):
-        pass
+        a = self.pixel2meter(imageXY, imageYZ)
+        endPos = a * (self.detect_yellow(imageXY, imageYZ) - self.detect_red(imageXY, imageYZ))
+        return endPos
 
     def detect_joint_angles(self, imageXY, imageYZ):
-        pass
+        ja1 = 0
+        ja2 = 0
+        ja3 = 0
+        ja4 = 0
+        return np.array([ja1, ja2, ja3, ja4])
+        
     def forward_kinematics(self, joint_angles):
-        pass
+        end_effector = np.array([])
+        return end_effector
 
     # Calculate the robot Jacobian
     def calculate_jacobian(self,imageXY, imageYZ):
-        pass
+        joints = self.detect_joint_angles(imageXY, imageYZ)
+        jacobian = np.array([])
+        return jacobian
+    def target_tragectory(self):
+        # pulll targe move from topics
+        return np.array([0,0,0])
 
     def control_closed(self,imageXY, imageYZ):
-        pass
+        # P gain
+        K_p = np.array([[10,0],[0,10]])
+        # D gain
+        K_d = np.array([[0.1,0],[0,0.1]])
+        # estimate time step
+        cur_time = np.array([rospy.get_time()])
+        dt = cur_time - self.time_previous_step
+        self.time_previous_step = cur_time
+        # robot end-effector position
+        pos = self.detect_end_effector(imageXY, imageYZ)
+        # desired trajectory
+        pos_d= self.target_tragectory() 
+        # estimate derivative of error
+        self.error_d = ((pos_d - pos) - self.error)/dt
+        # estimate error
+        self.error = pos_d-pos
+        q = self.detect_joint_angles(imageXY, imageYZ) # estimate initial value of joints'
+        J_inv = np.linalg.pinv(self.calculate_jacobian(imageXY, imageYZ))  # calculating the psudeo inverse of Jacobian
+        dq_d =np.dot(J_inv, ( np.dot(K_d,self.error_d.transpose()) + np.dot(K_p,self.error.transpose()) ) )  # control input (angular velocity of joints)
+        q_d = q + (dt * dq_d)  # control input (angular position of joints)
+        return q_d
 
     def callback(self, cam1_data,cam2_data):
         try:
-            self.cv_image1 = self.bridge.imgmsg_to_cv2(cam1_data, "bgr8")
-            self.cv_image2 = self.bridge.imgmsg_to_cv2(cam2_data, "bgr8")
+            self.cv_image2 = self.bridge.imgmsg_to_cv2(cam1_data, "bgr8")
+            self.cv_image1 = self.bridge.imgmsg_to_cv2(cam2_data, "bgr8")
         except CvBridgeError as e:
             print(e)
         # corr = self.detect_red(self.cv_image1, self.cv_image2)
         # print ("red: x {}, y {}, z {}".format(corr[0], corr[1], corr[2]))
 
         # corr = self.detect_green(self.cv_image1, self.cv_image2)
-        # print ("green:x {}, y {}, z {}".format(corr[0], corr[1], corr[2]))
+        # print ("green:x {}, y {}, z1 {}".format(corr[0], corr[1], corr[2]))
 
         # corr = self.detect_blue(self.cv_image1, self.cv_image2)
         # print ("blue:x {}, y {}, z {}".format(corr[0], corr[1], corr[2]))
 
         # corr = self.detect_yellow(self.cv_image1, self.cv_image2)
-        # print ("yellow:x {}, y {}, z {}".format(corr[0], corr[1], corr[2]))
+        # print ("yellow:x {}, y {}, z {} ".format(corr[0], corr[1], corr[2]))
 
-        print(self.detect_target(self.cv_image1, self.cv_image2))
+        # print(self.detect_target(self.cv_image1, self.cv_image2))
 
         im1=cv2.imshow('window1', self.cv_image1)
         im2=cv2.imshow('window2', self.cv_image2)
         cv2.waitKey(1)
+        # print(self.detect_end_effector(self.cv_image1, self.cv_image2))
 
     
 
