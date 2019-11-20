@@ -10,7 +10,8 @@ import message_filters
 from sensor_msgs.msg import Image
 from std_msgs.msg import Float64MultiArray, Float64
 from cv_bridge import CvBridge, CvBridgeError
-
+from scipy.optimize import least_squares
+import sympy as sym
 
 class RobotController3D():
 
@@ -29,6 +30,11 @@ class RobotController3D():
         self.time_previous_step = np.array([rospy.get_time()], dtype='float64') 
         self.error = np.array([0.0,0.0], dtype='float64')  
         self.error_d = np.array([0.0,0.0], dtype='float64') 
+        self.joints_ang = np.array([0.0, 0.0, 0.0, 0.0], dtype='float64') 
+        self.joints_pos = np.array([[0.0, 0.0, 0.0],
+                                    [0.0, 0.0, 2.0],
+                                    [0.0, 0.0, 5.0],
+                                    [0.0, 0.0, 7.0]], dtype='float64')
 
         
 
@@ -176,29 +182,79 @@ class RobotController3D():
       dist = np.sum((circle1Pos - circle2Pos)**2)
       return 3 / np.sqrt(dist)
 
-
+    def detect_joint_pos(self, imageXZ, imageYZ):
+        self.joints_pos[0] = self.detect_yellow(imageXZ, imageYZ)
+        self.joints_pos[1] = self.detect_blue(imageXZ, imageYZ)
+        self.joints_pos[2] = self.detect_green(imageXZ, imageYZ)
+        self.joints_pos[3] = self.detect_red(imageXZ, imageYZ)
+        
+        return
+    
     # detect robot end-effector from the image
     def detect_end_effector(self,imageXY, imageYZ):
         a = self.pixel2meter(imageXY, imageYZ)
         endPos = a * (self.detect_yellow(imageXY, imageYZ) - self.detect_red(imageXY, imageYZ))
         return endPos
 
-    def detect_joint_angles(self, imageXY, imageYZ):
-        ja1 = 0
-        ja2 = 0
-        ja3 = 0
-        ja4 = 0
-        return np.array([ja1, ja2, ja3, ja4])
+    def detect_joint_angles(self):
+        def x2q_joint4(z, a, b, c):
+            x = z[0]
+            y = z[1]
+            z = z[2]
+
+            F = np.empty((3))
+            F[0] = 3*np.cos(x)*np.sin(z) + 3*np.sin(x)*np.sin(y)*np.cos(z) - a
+            F[1] = 3*np.sin(x)*np.sin(z) - 3*np.cos(x)*np.sin(y)*np.cos(z) - b
+            F[2] = 3*np.cos(y)*np.cos(z) + 2 - c
+            return F
         
-    def forward_kinematics(self, joint_angles):
-        end_effector = np.array([])
-        return end_effector
+        def x2q_end(m, a, y, z):
+            m = m[0]
+            
+            F = np.empty((1))
+            F[0] = -2*np.sin(y)*np.sin(m) + 2*np.cos(y)*np.cos(z)*np.cos(m) +3*np.cos(y)*np.cos(z) + 2 - a
+
+            return F
+        
+        self.detect_joints_pos()
+        joint4_pos = np.array(self.joints_pos[2])
+        end_pos = np.array(self.joints_pos[3])
+        prev_ang = self.joints_ang
+        k1 = least_squares(x2q_joint4, prev_ang[:3], args = (joint4_pos), 
+                          bounds = (np.array(prev_ang[0:3]) - 0.05, np.array(prev_ang[0:3]) + 0.05))
+        curr_ang = k1.x
+        k2 = least_squares(x2q_end, prev_ang[3], args = ([end_pos[2], curr_ang[1], curr_ang[2]]), 
+                          bounds = (prev_ang[3] - 0.05, prev_ang[3] + 0.05))
+        curr_ang.append(k2.x[0])
+        self.joints_ang = curr_ang
+        return curr_ang
+        
+        
+        
+        pass
+    def forward_kinematics(self):
+        #Forward kinematics
+        t1, t2, t3, t4 = sym.symbols('t1 t2 t3 t4')
+        ex = 2*sym.sin(t1)*sym.cos(t2)*sym.sin(t4) - 2*sym.sin(t1)*sym.sin(t2)*sym.cos(t3)*sym.cos(t4) + 2*sym.cos(t1)*sym.sin(t3)*sym.cos(t4) + 3*sym.cos(t1)*sym.sin(t3) + 3*sym.sin(t1)*sym.sin(t2)*sym.cos(t3)
+        ey = -2*sym.cos(t1)*sym.cos(t2)*sym.sin(t4) + 2*sym.sin(t1)*sym.sin(t3)*sym.cos(t4) - 2*sym.cos(t1)*sym.sin(t2)*sym.cos(t3)*sym.cos(t4) +3*sym.sin(t1)*sym.sin(t3) - 3*sym.cos(t1)*sym.sin(t2)*sym.cos(t3)
+        ez = -2*sym.sin(t2)*sym.sin(t4) + 2*sym.cos(t2)*sym.cos(t3)*sym.cos(t4) + 3*sym.cos(t2)*sym.cos(t3) + 2
+
+        return [ex, ey, ez]
 
     # Calculate the robot Jacobian
     def calculate_jacobian(self,imageXY, imageYZ):
-        joints = self.detect_joint_angles(imageXY, imageYZ)
-        jacobian = np.array([])
+        FK = self.forward_kinematics()
+        joint_angles = self.detect_joint_angles()
+        t1, t2, t3, t4 = sym.symbols('t1 t2 t3 t4')
+        t = [t1, t2, t3, t4]
+        jacobian = np.eye(3, 4)
+        for i in len(FK):
+            for j in len(joint_angles):
+                expr = sym.diff(FK[i], t[j])
+                jacobian[i][j] = expr.subs([(t1, joint_angles[0]), (t2, joint_angles[1], (t3, joint_angles[2], (t4, joint_angles[3])))])
         return jacobian
+
+
     def target_tragectory(self):
         # pulll targe move from topics
         return np.array([0,0,0])
