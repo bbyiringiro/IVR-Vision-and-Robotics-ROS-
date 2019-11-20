@@ -202,7 +202,7 @@ class RobotController3D():
         joint_pos2 = self.detect_green(imageXZ, imageYZ)
         joint_pos3 = self.detect_red(imageXZ, imageYZ)
         
-        return np.array([joint_pos0, joint_pos1-joint_pos0, joint_pos2-joint_pos0, joint_pos3-joint_pos0])
+        return np.array([joint_pos0, joint_pos1-joint_pos0, joint_pos2-joint_pos0, joint_pos0 - joint_pos3])
     
     # detect robot end-effector from the image
     def detect_end_effector(self,imageXY, imageYZ):
