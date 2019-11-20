@@ -182,13 +182,13 @@ class RobotController3D():
       dist = np.sum((circle1Pos - circle2Pos)**2)
       return 3 / np.sqrt(dist)
 
-    def detect_joint_pos(self, imageXZ, imageYZ):
-        self.joints_pos[0] = self.detect_yellow(imageXZ, imageYZ)
-        self.joints_pos[1] = self.detect_blue(imageXZ, imageYZ)
-        self.joints_pos[2] = self.detect_green(imageXZ, imageYZ)
-        self.joints_pos[3] = self.detect_red(imageXZ, imageYZ)
+    def detect_joints_pos(self, imageXZ, imageYZ):
+        joint_pos0 = self.detect_yellow(imageXZ, imageYZ)
+        joint_pos1 = self.detect_blue(imageXZ, imageYZ)
+        joint_pos2 = self.detect_green(imageXZ, imageYZ)
+        joint_pos3 = self.detect_red(imageXZ, imageYZ)
         
-        return
+        return np.array([joint_pos0, joint_pos1, joint_pos2, joint_pos3])
     
     # detect robot end-effector from the image
     def detect_end_effector(self,imageXY, imageYZ):
@@ -216,7 +216,6 @@ class RobotController3D():
 
             return F
         
-        self.detect_joints_pos()
         joint4_pos = np.array(self.joints_pos[2])
         end_pos = np.array(self.joints_pos[3])
         prev_ang = self.joints_ang
@@ -306,7 +305,8 @@ class RobotController3D():
         im2=cv2.imshow('window2', self.cv_image2)
         cv2.waitKey(1)
         # print(self.detect_end_effector(self.cv_image1, self.cv_image2))
-
+        self.joints_pos = self.detect_joints_pos()
+        q_d = self.control_closed(cv_image)
     
 
     
