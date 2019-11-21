@@ -39,51 +39,40 @@ class RobotController3D():
                                     [0.0, 0.0, 2.0],
                                     [0.0, 0.0, 5.0],
                                     [0.0, 0.0, 7.0]], dtype='float64')
+        self.prev_yellow_pos = np.array([0.0,0.0,0.0], dtype='float64')
+        self.prev_blue_pos = np.array([0.0,0.0,0.0], dtype='float64')
+        self.prev_green_pos = np.array([0.0,0.0,0.0], dtype='float64')
+        self.prev_red_pos = np.array([0.0,0.0,0.0], dtype='float64')
+        self.prev_target_pos =np.array([0.0,0.0,0.0], dtype='float64')
+
+
+        target_x = message_filters.Subscriber("/target/x_position_controller/command", Float64)
+        target_y = message_filters.Subscriber("/target/y_position_controller/command", Float64)
+        target_z = message_filters.Subscriber("/target/z_position_controller/command", Float64)
+        # target_x1 = message_filters.Subscriber("/target2/x2_position_controller/command", Float64)
+        # target_y2 = message_filters.Subscriber("/target2/y2_position_controller/command", Float64)
+        # target_z = message_filters.Subscriber("/target2/x2_position_controller/command", Float64)
+        sync1 = message_filters.ApproximateTimeSynchronizer([target_x, target_y, target_z],5,0.1, allow_headerless=True)
+        sync1.registerCallback(self.callback2)
+        self.actual_sphere_x=1.0
+        self.actual_sphere_y=1.0
+        self.actual_sphere_z=1.0
+    
+    def callback2(self,x, y, z):
+        self.actual_sphere_x=x.data
+        self.actual_sphere_y=y.data
+        self.actual_sphere_z=z.data
+
+
+        
 
         
 
 
     def detect_blue(self,imageXZ,imageYZ):
-        mask_xz = cv2.inRange(imageXZ, (100, 0, 0), (255, 0, 0))
-        mask_yz = cv2.inRange(imageYZ, (100, 0, 0), (255, 0, 0))
-
-        kernel = np.ones((5, 5), np.uint8)
-        mask_xz = cv2.dilate(mask_xz, kernel, iterations=3)
-        mask_yz = cv2.dilate(mask_yz, kernel, iterations=3)
-        M1 = cv2.moments(mask_xz)
-        cx = int(M1['m10'] / M1['m00'])
-        cz = int(M1['m01'] / M1['m00'])
-
-        M2 = cv2.moments(mask_yz)
-        cy = int(M2['m10'] / M2['m00'])
-        cz1 = int(M2['m01'] / M2['m00'])
-        cz = (cz+cz1)/2 # take average of Z returned from the two camera
-
-
-        return np.array([cx, cy, cz])
-
-    def detect_yellow(self,imageXZ,imageYZ):
-        mask_xz = cv2.inRange(imageXZ, (0, 100, 100), (0, 255, 255))
-        mask_yz = cv2.inRange(imageYZ, (0, 100, 100), (0, 255, 255))
-
-        kernel = np.ones((5, 5), np.uint8)
-        mask_xz = cv2.dilate(mask_xz, kernel, iterations=3)
-        mask_yz = cv2.dilate(mask_yz, kernel, iterations=3)
-        M1 = cv2.moments(mask_xz)
-        cx = int(M1['m10'] / M1['m00'])
-        cz = int(M1['m01'] / M1['m00'])
-
-        M2 = cv2.moments(mask_yz)
-        cy = int(M2['m10'] / M2['m00'])
-        cz1 = int(M2['m01'] / M2['m00'])
-        cz = (cz+cz1)/2 # take average of Z returned from the two camera
-
-        return np.array([cx, cy, cz])
-
-    def detect_red(self,imageXZ,imageYZ):
         try:
-            mask_xz = cv2.inRange(imageXZ, (0, 0, 100), (0, 0, 255))
-            mask_yz = cv2.inRange(imageYZ, (0, 0, 100), (0, 0, 255))
+            mask_xz = cv2.inRange(imageXZ, (100, 0, 0), (255, 0, 0))
+            mask_yz = cv2.inRange(imageYZ, (100, 0, 0), (255, 0, 0))
 
             kernel = np.ones((5, 5), np.uint8)
             mask_xz = cv2.dilate(mask_xz, kernel, iterations=3)
@@ -96,10 +85,54 @@ class RobotController3D():
             cy = int(M2['m10'] / M2['m00'])
             cz1 = int(M2['m01'] / M2['m00'])
             cz = (cz+cz1)/2 # take average of Z returned from the two camera
+            self.prev_blue_pos = np.array([cx, cy, cz])
         except:
-            cx=0
-            cy=0
-            cz=0
+            return self.prev_blue_pos
+
+
+        return np.array([cx, cy, cz])
+
+    def detect_yellow(self,imageXZ,imageYZ):
+        try:
+            mask_xz = cv2.inRange(imageXZ, (0, 100, 100), (0, 255, 255))
+            mask_yz = cv2.inRange(imageYZ, (0, 100, 100), (0, 255, 255))
+
+            kernel = np.ones((5, 5), np.uint8)
+            mask_xz = cv2.dilate(mask_xz, kernel, iterations=3)
+            mask_yz = cv2.dilate(mask_yz, kernel, iterations=3)
+            M1 = cv2.moments(mask_xz)
+            cx = int(M1['m10'] / M1['m00'])
+            cz = int(M1['m01'] / M1['m00'])
+
+            M2 = cv2.moments(mask_yz)
+            cy = int(M2['m10'] / M2['m00'])
+            cz1 = int(M2['m01'] / M2['m00'])
+            cz = (cz+cz1)/2 # take average of Z returned from the two camera
+            self.prev_yellow_pos = np.array([cx, cy, cz])
+        except:
+            return self.prev_yellow_pos
+
+        return np.array([cx, cy, cz])
+
+    def detect_red(self,imageXZ,imageYZ):
+        try:
+            mask_xz = cv2.inRange(imageXZ, (0, 0, 100), (100, 100, 255))
+            mask_yz = cv2.inRange(imageYZ, (0, 0, 100), (100, 100, 255))
+
+            kernel = np.ones((5, 5), np.uint8)
+            mask_xz = cv2.dilate(mask_xz, kernel, iterations=3)
+            mask_yz = cv2.dilate(mask_yz, kernel, iterations=3)
+            M1 = cv2.moments(mask_xz)
+            cx = int(M1['m10'] / M1['m00'])
+            cz = int(M1['m01'] / M1['m00'])
+
+            M2 = cv2.moments(mask_yz)
+            cy = int(M2['m10'] / M2['m00'])
+            cz1 = int(M2['m01'] / M2['m00'])
+            cz = (cz+cz1)/2 # take average of Z returned from the two camera
+            self.prev_red_pos = np.array([cx, cy, cz])
+        except:
+            return self.prev_red_pos
 
         return np.array([cx, cy, cz])
 
@@ -119,30 +152,30 @@ class RobotController3D():
             cy = int(M2['m10'] / M2['m00'])
             cz1 = int(M2['m01'] / M2['m00'])
             cz = (cz+cz1)/2 # take average of Z returned from the two camera
+            self.prev_green_pos = np.array([cx, cy, cz])
         except:
-            cx=0
-            cy=0
-            cz=0
+            return self.prev_green_pos
 
         return np.array([cx, cy, cz])
 
-    def detect_target(self, imageXY, imageYZ):
+    def detect_target(self, imageXZ, imageYZ):
         lower_orange = np.array([10, 40, 90],np.uint8)
         upper_orange = np.array([27, 255, 255],np.uint8)
-        imageXY = cv2.cvtColor(imageXY,cv2.COLOR_BGR2HSV)
+        imageXZ = cv2.cvtColor(imageXZ,cv2.COLOR_BGR2HSV)
         imageYZ = cv2.cvtColor(imageYZ,cv2.COLOR_BGR2HSV)
 
-        mask_xy = cv2.inRange(imageXY, lower_orange, upper_orange)
+        mask_xz = cv2.inRange(imageXZ, lower_orange, upper_orange)
         mask_yz = cv2.inRange(imageYZ, lower_orange, upper_orange)
 
 
-        contours_xy, _ = cv2.findContours(mask_xy, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        contours_xz, _ = cv2.findContours(mask_xz, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         contours_yz, _ = cv2.findContours(mask_yz, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        failed = False
         try:
-            if (len(contours_xy) == 2):
-                sphere = contours_xy[1]
+            if (len(contours_xz) == 2):
+                sphere = contours_xz[1]
             else:
-                sphere = contours_xy[0]
+                sphere = contours_xz[0]
             if(cv2.contourArea(sphere)==0):
                 M=sphere[0][0]
                 cX = M[0]
@@ -152,9 +185,7 @@ class RobotController3D():
                 cX = int(M["m10"] / M["m00"])
                 cZ_1 = int(M["m01"] / M["m00"])     
         except:
-            print(len(contours_xy))
-            cX = 0
-            cZ_1 = 0
+            failed=True
 
             
 
@@ -172,42 +203,48 @@ class RobotController3D():
                 cY = int(M["m10"] / M["m00"])
                 cZ_2 = int(M["m01"] / M["m00"]) 
         except Exception as err:
-            print(len(contours_yz))
-            print(err)
-            # print (M["m10"])
-            cY=0
-            cZ_2=0
+            failed = True
+
         cZ=0
-        if(cZ_1 !=0 and cZ_2):
+        if(cZ_1 !=0 and cZ_2 !=0):
             cZ = (cZ_1 + cZ_2)/2
         elif (cZ_1 !=0):
             cZ = cZ_1
         else:
             cZ = cZ_2
 
-
-        return np.array([cX, cY, cZ])
+        if(failed):
+            return self.prev_target_pos
+        else:
+            a = self.pixel2meter(self.cv_image1, self.cv_image2)
+            result = a * (self.detect_yellow(imageXZ, imageYZ) - np.array([cX, cY, cZ]))
+            print("                                        "+str(result))
+            result = np.array([self.actual_sphere_x, self.actual_sphere_y, self.actual_sphere_z])
+            print(result)
+            self.prev_target_pos = result
+            return result
     
-    def pixel2meter(self,imageXY, imageYZ):
+    def pixel2meter(self,imageXZ, imageYZ):
       # Obtain the centre of each coloured blob
-      circle1Pos = self.detect_blue(imageXY, imageYZ)
-      circle2Pos = self.detect_green(imageXY,imageYZ)
+      circle1Pos = self.detect_blue(imageXZ, imageYZ)
+      circle2Pos = self.detect_green(imageXZ,imageYZ)
       # find the distance between two circles
       dist = np.sum((circle1Pos - circle2Pos)**2)
       return 3 / np.sqrt(dist)
 
     def detect_joints_pos(self, imageXZ, imageYZ):
+        a = self.pixel2meter(imageXZ, imageYZ)
         joint_pos0 = self.detect_yellow(imageXZ, imageYZ)
         joint_pos1 = self.detect_blue(imageXZ, imageYZ)
         joint_pos2 = self.detect_green(imageXZ, imageYZ)
         joint_pos3 = self.detect_red(imageXZ, imageYZ)
         
-        return np.array([joint_pos0, joint_pos1-joint_pos0, joint_pos2-joint_pos0, joint_pos0 - joint_pos3])
+        return a*np.array([joint_pos0, joint_pos0 -joint_pos1, joint_pos0-joint_pos2, joint_pos0 - joint_pos3])
     
     # detect robot end-effector from the image
-    def detect_end_effector(self,imageXY, imageYZ):
-        a = self.pixel2meter(imageXY, imageYZ)
-        endPos = a * (self.detect_yellow(imageXY, imageYZ) - self.detect_red(imageXY, imageYZ))
+    def detect_end_effector(self,imageXZ, imageYZ):
+        a = self.pixel2meter(imageXZ, imageYZ)
+        endPos = a * (self.detect_yellow(imageXZ, imageYZ) - self.detect_red(imageXZ, imageYZ))
         return endPos
 
     def detect_joint_angles(self):
@@ -230,14 +267,13 @@ class RobotController3D():
 
             return F
         
-        a = self.pixel2meter(self.cv_image1, self.cv_image2)
         joint4_pos = np.array(self.joints_pos[2])
         end_pos = np.array(self.joints_pos[3])
         prev_ang = self.joints_ang
-        k1 = least_squares(x2q_joint4, prev_ang[:3], args = (joint4_pos/a), 
+        k1 = least_squares(x2q_joint4, prev_ang[:3], args = (joint4_pos),
                           bounds = (np.array(prev_ang[0:3]) - 0.05, np.array(prev_ang[0:3]) + 0.05))
         curr_ang = k1.x
-        k2 = least_squares(x2q_end, prev_ang[3], args = ([end_pos[2]/a, curr_ang[1], curr_ang[2]]), 
+        k2 = least_squares(x2q_end, prev_ang[3], args = ([end_pos[2], curr_ang[1], curr_ang[2]]),
                           bounds = (prev_ang[3] - 0.05, prev_ang[3] + 0.05))
         curr_ang = np.append(curr_ang, k2.x[0])
         self.joints_ang = curr_ang
@@ -254,7 +290,7 @@ class RobotController3D():
         return [ex, ey, ez]
 
     # Calculate the robot Jacobian
-    def calculate_jacobian(self,imageXY, imageYZ):
+    def calculate_jacobian(self,imageXZ, imageYZ):
         FK = self.forward_kinematics()
         joint_angles = self.detect_joint_angles()
         t1, t2, t3, t4 = sym.symbols('t1 t2 t3 t4')
@@ -267,29 +303,25 @@ class RobotController3D():
         return jacobian
 
 
-    def target_tragectory(self):
-        # pulll targe move from topics
-        return np.array([0,0,0])
-
-    def control_closed(self,imageXY, imageYZ):
+    def control_closed(self,imageXZ, imageYZ):
         # P gain
-        K_p = np.array([[1,0,0],[0,1,0], [0,0,1]])
+        K_p = np.array([[0.3,0,0],[0,0,0.3], [0,0,0.3]])
         # D gain
-        K_d = np.array([[0.1,0,0.0],[0,0.1,0.0], [0,0.1,0.0]])
+        K_d = np.array([[0.1,0,0.0],[0,0.1,0.0], [0,0.0,0.1]])
         # estimate time step
         cur_time = np.array([rospy.get_time()])
         dt = cur_time - self.time_previous_step
         self.time_previous_step = cur_time
         # robot end-effector position
-        pos = self.detect_end_effector(imageXY, imageYZ)
+        pos = self.detect_end_effector(imageXZ, imageYZ)
         # desired trajectory
-        pos_d= self.detect_target(imageXY, imageYZ) 
+        pos_d= self.detect_target(imageXZ, imageYZ) 
         # estimate derivative of error
         self.error_d = ((pos_d - pos) - self.error)/dt
         # estimate error
         self.error = pos_d-pos
         q = self.detect_joint_angles() # estimate initial value of joints'
-        J_inv = np.linalg.pinv(self.calculate_jacobian(imageXY, imageYZ))  # calculating the psudeo inverse of Jacobian
+        J_inv = np.linalg.pinv(self.calculate_jacobian(imageXZ, imageYZ))  # calculating the psudeo inverse of Jacobian
         dq_d =np.dot(J_inv, ( np.dot(K_d,self.error_d.transpose()) + np.dot(K_p,self.error.transpose()) ) )  # control input (angular velocity of joints)
         q_d = q + (dt * dq_d)  # control input (angular position of joints)
         return q_d
@@ -317,6 +349,7 @@ class RobotController3D():
         im1=cv2.imshow('window1', self.cv_image1)
         im2=cv2.imshow('window2', self.cv_image2)
         cv2.waitKey(1)
+        # print(self.detect_target(self.cv_image1, self.cv_image2))
         # print(self.detect_end_effector(self.cv_image1, self.cv_image2))
         self.joints_pos = self.detect_joints_pos(self.cv_image1, self.cv_image2)
         q_d = self.control_closed(self.cv_image1, self.cv_image2)
