@@ -9,7 +9,6 @@ from std_msgs.msg import String
 from sensor_msgs.msg import Image
 from std_msgs.msg import Float64MultiArray, Float64
 from cv_bridge import CvBridge, CvBridgeError
-import commonLib as lib
 
 
 class image_converter:
@@ -20,13 +19,10 @@ class image_converter:
     rospy.init_node('image_processing', anonymous=True)
     # initialize a publisher to send images from camera2 to a topic named image_topic2
     self.image_pub2 = rospy.Publisher("image_topic2",Image, queue_size = 1)
-    self.cam2_data= rospy.Publisher("cam2_data", Float64MultiArray, queue_size=10)
     # initialize a subscriber to recieve messages rom a topic named /robot/camera1/image_raw and use callback function to recieve data
     self.image_sub2 = rospy.Subscriber("/camera2/robot/image_raw",Image,self.callback2)
     # initialize the bridge between openCV and ROS
     self.bridge = CvBridge()
-    self.prev_target_pos =np.array([0.0,0.0], dtype='float64')
-
 
 
   # Recieve data, process it, and publish
@@ -38,20 +34,12 @@ class image_converter:
       print(e)
     # Uncomment if you want to save the image
     #cv2.imwrite('image_copy.png', cv_image)
-    # im2=cv2.imshow('window2', self.cv_image2)
+    im2=cv2.imshow('window2', self.cv_image2)
     cv2.waitKey(1)
-
-    res =lib.detect_red(self.cv_image2) + lib.detect_green(self.cv_image2)+ lib.detect_blue(self.cv_image2)+lib.detect_yellow(self.cv_image2)+ lib.detect_target(self.cv_image2)
-    tmp_res=Float64MultiArray()
-    tmp_res.data=res
-    if(len(res) !=10):
-      print("size should be 10")
-      quit(1)
 
     # Publish the results
     try: 
       self.image_pub2.publish(self.bridge.cv2_to_imgmsg(self.cv_image2, "bgr8"))
-      self.cam2_data.publish(tmp_res)
     except CvBridgeError as e:
       print(e)
 

@@ -18,21 +18,17 @@ class RobotController3D():
     # Defines publisher and subscriber
     def __init__(self):
         # initialize the node named image_processing
-        rospy.init_node('data_processing', anonymous=True)
-        cam1_sub = message_filters.Subscriber("/cam1_data", Float64MultiArray)
-        cam2_sub = message_filters.Subscriber("/cam2_data", Float64MultiArray)
+        rospy.init_node('image_processing', anonymous=True)
+        # initialize a publisher to send images from camera1 to a topic named image_topic1
+        self.image_pub1 = rospy.Publisher("image_topic1",Image, queue_size = 1)
+        self.image_pub2 = rospy.Publisher("image_topic2",Image, queue_size = 1)
+        cam1_sub = message_filters.Subscriber("/camera1/robot/image_raw", Image)
+        cam2_sub = message_filters.Subscriber("/camera2/robot/image_raw", Image)
         self.robot_joint1_pub = rospy.Publisher("/robot/joint1_position_controller/command", Float64, queue_size=10)
         self.robot_joint2_pub = rospy.Publisher("/robot/joint2_position_controller/command", Float64, queue_size=10)
         self.robot_joint3_pub = rospy.Publisher("/robot/joint3_position_controller/command", Float64, queue_size=10)
         self.robot_joint4_pub = rospy.Publisher("/robot/joint4_position_controller/command", Float64, queue_size=10)
-        self.target_x_pub = rospy.Publisher("/target_pred_x", Float64, queue_size=10)
-        self.target_y_pub = rospy.Publisher("/target_pred_y", Float64, queue_size=10)
-        self.target_z_pub = rospy.Publisher("/target_pred_z", Float64, queue_size=10)
-        self.end_x_pub = rospy.Publisher("/end_x", Float64, queue_size=10)
-        self.end_y_pub = rospy.Publisher("/end_y", Float64, queue_size=10)
-        self.end_z_pub = rospy.Publisher("/end_z", Float64, queue_size=10)
-        # sync = message_filters.TimeSynchronizer([cam1_sub, cam2_sub], 2)
-        sync = message_filters.ApproximateTimeSynchronizer([cam1_sub, cam2_sub],5,0.1, allow_headerless=True)
+        sync = message_filters.TimeSynchronizer([cam1_sub, cam2_sub], 2)
         sync.registerCallback(self.callback)
         self.bridge = CvBridge()
         self.time_previous_step = np.array([rospy.get_time()], dtype='float64') 
@@ -47,59 +43,186 @@ class RobotController3D():
         self.prev_blue_pos = np.array([0.0,0.0,0.0], dtype='float64')
         self.prev_green_pos = np.array([0.0,0.0,0.0], dtype='float64')
         self.prev_red_pos = np.array([0.0,0.0,0.0], dtype='float64')
-        self.pixel_to_meter = 0.037488286740304605
-        self.YZ =np.array([
-            [0,0],
-            [0,0],
-            [0,0],
-            [0,0],
-            [0,0]
-        ])
+        self.prev_target_pos =np.array([0.0,0.0,0.0], dtype='float64')
 
-        self.XZ =np.array([
-            [0,0],
-            [0,0],
-            [0,0],
-            [0,0],
-            [0,0]
-        ])
+
+        target_x = message_filters.Subscriber("/target/x_position_controller/command", Float64)
+        target_y = message_filters.Subscriber("/target/y_position_controller/command", Float64)
+        target_z = message_filters.Subscriber("/target/z_position_controller/command", Float64)
+        # target_x1 = message_filters.Subscriber("/target2/x2_position_controller/command", Float64)
+        # target_y2 = message_filters.Subscriber("/target2/y2_position_controller/command", Float64)
+        # target_z = message_filters.Subscriber("/target2/x2_position_controller/command", Float64)
+        sync1 = message_filters.ApproximateTimeSynchronizer([target_x, target_y, target_z],5,0.1, allow_headerless=True)
+        sync1.registerCallback(self.callback2)
+        self.actual_sphere_x=1.0
+        self.actual_sphere_y=1.0
+        self.actual_sphere_z=1.0
+    
+    def callback2(self,x, y, z):
+        self.actual_sphere_x=x.data
+        self.actual_sphere_y=y.data
+        self.actual_sphere_z=z.data
+
+
+        
+
+        
 
 
     def detect_blue(self,imageXZ,imageYZ):
-        cx = imageXZ[0]
-        cy = imageYZ[0]
-        cz = (imageXZ[1] + imageYZ[1])/2
+        try:
+            mask_xz = cv2.inRange(imageXZ, (100, 0, 0), (255, 0, 0))
+            mask_yz = cv2.inRange(imageYZ, (100, 0, 0), (255, 0, 0))
+
+            kernel = np.ones((5, 5), np.uint8)
+            mask_xz = cv2.dilate(mask_xz, kernel, iterations=3)
+            mask_yz = cv2.dilate(mask_yz, kernel, iterations=3)
+            M1 = cv2.moments(mask_xz)
+            cx = int(M1['m10'] / M1['m00'])
+            cz = int(M1['m01'] / M1['m00'])
+
+            M2 = cv2.moments(mask_yz)
+            cy = int(M2['m10'] / M2['m00'])
+            cz1 = int(M2['m01'] / M2['m00'])
+            cz = (cz+cz1)/2 # take average of Z returned from the two camera
+            self.prev_blue_pos = np.array([cx, cy, cz])
+        except:
+            return self.prev_blue_pos
+
+
         return np.array([cx, cy, cz])
 
     def detect_yellow(self,imageXZ,imageYZ):
-        cx = imageXZ[0]
-        cy = imageYZ[0]
-        cz = (imageXZ[1] + imageYZ[1])/2
+        try:
+            mask_xz = cv2.inRange(imageXZ, (0, 100, 100), (0, 255, 255))
+            mask_yz = cv2.inRange(imageYZ, (0, 100, 100), (0, 255, 255))
+
+            kernel = np.ones((5, 5), np.uint8)
+            mask_xz = cv2.dilate(mask_xz, kernel, iterations=3)
+            mask_yz = cv2.dilate(mask_yz, kernel, iterations=3)
+            M1 = cv2.moments(mask_xz)
+            cx = int(M1['m10'] / M1['m00'])
+            cz = int(M1['m01'] / M1['m00'])
+
+            M2 = cv2.moments(mask_yz)
+            cy = int(M2['m10'] / M2['m00'])
+            cz1 = int(M2['m01'] / M2['m00'])
+            cz = (cz+cz1)/2 # take average of Z returned from the two camera
+            self.prev_yellow_pos = np.array([cx, cy, cz])
+        except:
+            return self.prev_yellow_pos
+
         return np.array([cx, cy, cz])
 
     def detect_red(self,imageXZ,imageYZ):
-        cx = imageXZ[0]
-        cy = imageYZ[0]
-        cz = (imageXZ[1] + imageYZ[1])/2
+        try:
+            mask_xz = cv2.inRange(imageXZ, (0, 0, 100), (100, 100, 255))
+            mask_yz = cv2.inRange(imageYZ, (0, 0, 100), (100, 100, 255))
+
+            kernel = np.ones((5, 5), np.uint8)
+            mask_xz = cv2.dilate(mask_xz, kernel, iterations=3)
+            mask_yz = cv2.dilate(mask_yz, kernel, iterations=3)
+            M1 = cv2.moments(mask_xz)
+            cx = int(M1['m10'] / M1['m00'])
+            cz = int(M1['m01'] / M1['m00'])
+
+            M2 = cv2.moments(mask_yz)
+            cy = int(M2['m10'] / M2['m00'])
+            cz1 = int(M2['m01'] / M2['m00'])
+            cz = (cz+cz1)/2 # take average of Z returned from the two camera
+            self.prev_red_pos = np.array([cx, cy, cz])
+        except:
+            return self.prev_red_pos
+
         return np.array([cx, cy, cz])
 
     def detect_green(self,imageXZ,imageYZ):
-        cx = imageXZ[0]
-        cy = imageYZ[0]
-        cz = (imageXZ[1] + imageYZ[1])/2
+        mask_xz = cv2.inRange(imageXZ, (0, 100, 0), (0, 255, 0))
+        mask_yz = cv2.inRange(imageYZ, (0, 100, 0), (0, 255, 0))
+
+        try:
+            kernel = np.ones((5, 5), np.uint8)
+            mask_xz = cv2.dilate(mask_xz, kernel, iterations=3)
+            mask_yz = cv2.dilate(mask_yz, kernel, iterations=3)
+            M1 = cv2.moments(mask_xz)
+            cx = int(M1['m10'] / M1['m00'])
+            cz = int(M1['m01'] / M1['m00'])
+
+            M2 = cv2.moments(mask_yz)
+            cy = int(M2['m10'] / M2['m00'])
+            cz1 = int(M2['m01'] / M2['m00'])
+            cz = (cz+cz1)/2 # take average of Z returned from the two camera
+            self.prev_green_pos = np.array([cx, cy, cz])
+        except:
+            return self.prev_green_pos
+
         return np.array([cx, cy, cz])
 
     def detect_target(self, imageXZ, imageYZ):
-        x = imageXZ[0]
-        y = imageYZ[0]
-        z = (imageXZ[1]+imageYZ[1])/2
+        lower_orange = np.array([10, 40, 90],np.uint8)
+        upper_orange = np.array([27, 255, 255],np.uint8)
+        imageXZ = cv2.cvtColor(imageXZ,cv2.COLOR_BGR2HSV)
+        imageYZ = cv2.cvtColor(imageYZ,cv2.COLOR_BGR2HSV)
 
-                
+        mask_xz = cv2.inRange(imageXZ, lower_orange, upper_orange)
+        mask_yz = cv2.inRange(imageYZ, lower_orange, upper_orange)
 
-        result = self.pixel_to_meter * self.pos_normal(self.detect_yellow(self.XZ[3,:], self.YZ[3,:]),  [np.array([x, y,z])])
-        result[0][2] =result[0][2]+1
 
-        return result[0]
+        contours_xz, _ = cv2.findContours(mask_xz, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        contours_yz, _ = cv2.findContours(mask_yz, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        failed = False
+        try:
+            if (len(contours_xz) == 2):
+                sphere = contours_xz[1]
+            else:
+                sphere = contours_xz[0]
+            if(cv2.contourArea(sphere)==0):
+                M=sphere[0][0]
+                cX = M[0]
+                cZ_1 = M[1]
+            else:
+                M = cv2.moments(sphere)
+                cX = int(M["m10"] / M["m00"])
+                cZ_1 = int(M["m01"] / M["m00"])     
+        except:
+            failed=True
+
+            
+
+        try:
+            if (len(contours_yz) == 2):
+                sphere = contours_yz[1]
+            else:
+                sphere = contours_yz[0]
+            if(cv2.contourArea(sphere)==0):
+                M=sphere[0][0]
+                cY = M[0]
+                cZ_2 = M[1]
+            else:
+                M = cv2.moments(sphere)
+                cY = int(M["m10"] / M["m00"])
+                cZ_2 = int(M["m01"] / M["m00"]) 
+        except Exception as err:
+            failed = True
+
+        cZ=0
+        if(cZ_1 !=0 and cZ_2 !=0):
+            cZ = (cZ_1 + cZ_2)/2
+        elif (cZ_1 !=0):
+            cZ = cZ_1
+        else:
+            cZ = cZ_2
+
+        if(failed):
+            return self.prev_target_pos
+        else:
+            a = self.pixel2meter(self.cv_image1, self.cv_image2)
+            result = a * (self.detect_yellow(imageXZ, imageYZ) - np.array([cX, cY, cZ]))
+            #print("                                        "+str(result))
+            result = np.array([self.actual_sphere_x, self.actual_sphere_y, self.actual_sphere_z])
+            print(result)
+            self.prev_target_pos = result
+            return result
     
     def pixel2meter(self,imageXZ, imageYZ):
       # Obtain the centre of each coloured blob
@@ -128,11 +251,12 @@ class RobotController3D():
         return a * joints_pos
     
     # detect robot end-effector from the image
-    def detect_end_effector(self):
-        a = self.pixel_to_meter
-        origin = self.detect_yellow(self.XZ[3,:], self.YZ[3,:])
-        end = self.detect_red(self.XZ[0,:], self.YZ[0,:])
+    def detect_end_effector(self,imageXZ, imageYZ):
+        a = self.pixel2meter(imageXZ, imageYZ)
+        origin = self.detect_yellow(imageXZ, imageYZ)
+        end = self.detect_red(imageXZ, imageYZ)
         endPos = a * self.pos_normal(origin, [end])
+        print('end_pos: ', endPos[0])
         return endPos[0]
 
     def detect_joint_angles(self):
@@ -180,7 +304,7 @@ class RobotController3D():
     # Calculate the robot Jacobian
     def calculate_jacobian(self,imageXZ, imageYZ):
         FK = self.forward_kinematics()
-        joint_angles = self.joints_ang
+        joint_angles = self.detect_joint_angles()
         t1, t2, t3, t4 = sym.symbols('t1 t2 t3 t4')
         t = [t1, t2, t3, t4]
         jacobian = np.eye(3, 4)
@@ -193,15 +317,15 @@ class RobotController3D():
 
     def control_closed(self,imageXZ, imageYZ):
         # P gain
-        K_p = np.array([[0.3, 0.0, 0.0], [0.0, 0.4, 0.0], [0.0, 0.0, 0.3]])
+        K_p = np.array([[0.3, 0, 0], [0, 0.4, 0], [0, 0, 0.3]])
         # D gain
-        K_d = np.array([[0.002, 0.0, 0.0],[0.0, 0.002, 0.0], [0.0, 0.0, 0.001]])
+        K_d = np.array([[0.002, 0.0, 0.0], [0.0, 0.002, 0.0], [0.0 ,0.0, 0.001]])
         # estimate time step
         cur_time = np.array([rospy.get_time()])
         dt = cur_time - self.time_previous_step
         self.time_previous_step = cur_time
         # robot end-effector position
-        pos = self.detect_end_effector()
+        pos = self.detect_end_effector(imageXZ, imageYZ)
         # desired trajectory
         pos_d = self.detect_target(imageXZ, imageYZ) 
         # estimate derivative of error
@@ -215,8 +339,11 @@ class RobotController3D():
         return q_d
 
     def callback(self, cam1_data,cam2_data):
-        self.YZ = np.array(cam1_data.data).reshape(5,2)
-        self.XZ = np.array(cam2_data.data).reshape(5,2)
+        try:
+            self.cv_image2 = self.bridge.imgmsg_to_cv2(cam1_data, "bgr8")
+            self.cv_image1 = self.bridge.imgmsg_to_cv2(cam2_data, "bgr8")
+        except CvBridgeError as e:
+            print(e)
         # corr = self.detect_red(self.cv_image1, self.cv_image2)
         # print ("red: x {}, y {}, z {}".format(corr[0], corr[1], corr[2]))
 
@@ -231,40 +358,36 @@ class RobotController3D():
 
         # print(self.detect_target(self.cv_image1, self.cv_image2))
 
-        target_pred = self.detect_target(self.XZ[4,:], self.YZ[4,:])
-        end_effector =self.detect_end_effector()
+        im1=cv2.imshow('window1', self.cv_image1)
+        im2=cv2.imshow('window2', self.cv_image2)
+        cv2.waitKey(1)
+        # print(self.detect_target(self.cv_image1, self.cv_image2))
+        # print(self.detect_end_effector(self.cv_image1, self.cv_image2))
+        self.joints_pos = self.detect_joints_pos(self.cv_image1, self.cv_image2)
+        q_d = self.control_closed(self.cv_image1, self.cv_image2)
         self.joints_ang = q_d
-
-        # self.joints_pos = self.detect_joints_pos(self.cv_image1, self.cv_image2)
-        # q_d = self.control_closed(self.cv_image1, self.cv_image2)
-        # self.joints_ang = q_d
+        print('q_d: ', q_d)
 
 
 
         #q_d = self.control_open(cv_image)
-        # self.joint1=Float64()
-        # self.joint1.data= q_d[0]
-        # self.joint2=Float64()
-        # self.joint2.data= q_d[1]
-        # self.joint3=Float64()
-        # self.joint3.data= q_d[2]
-        # self.joint4=Float64()
-        # self.joint4.data= q_d[3]
+        self.joint1=Float64()
+        self.joint1.data= q_d[0]
+        self.joint2=Float64()
+        self.joint2.data= q_d[1]
+        self.joint3=Float64()
+        self.joint3.data= q_d[2]
+        self.joint4=Float64()
+        self.joint4.data= q_d[3]
 
 
 
         # Publish the results
         try: 
-            # self.robot_joint1_pub.publish(self.joint1)
-            # self.robot_joint2_pub.publish(self.joint2)
-            # self.robot_joint3_pub.publish(self.joint3)
-            # self.robot_joint4_pub.publish(self.joint4)
-            self.target_x_pub.publish(target_pred[0])
-            self.target_y_pub.publish(target_pred[1])
-            self.target_z_pub.publish(target_pred[2])
-            self.end_x_pub.publish(end_effector[0])
-            self.end_y_pub.publish(end_effector[1])
-            self.end_z_pub.publish(end_effector[2])
+            self.robot_joint1_pub.publish(self.joint1)
+            self.robot_joint2_pub.publish(self.joint2)
+            self.robot_joint3_pub.publish(self.joint3)
+            self.robot_joint4_pub.publish(self.joint4)
         except CvBridgeError as e:
             print(e)
     

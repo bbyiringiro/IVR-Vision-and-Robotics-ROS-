@@ -9,8 +9,6 @@ from std_msgs.msg import String
 from sensor_msgs.msg import Image
 from std_msgs.msg import Float64MultiArray, Float64
 from cv_bridge import CvBridge, CvBridgeError
-import commonLib as lib
-
 
 
 class image_converter:
@@ -18,44 +16,33 @@ class image_converter:
   # Defines publisher and subscriber
   def __init__(self):
     # initialize the node named image_processing
-    rospy.init_node('image_processing1', anonymous=True)
+    rospy.init_node('image_processing', anonymous=True)
     # initialize a publisher to send images from camera1 to a topic named image_topic1
     self.image_pub1 = rospy.Publisher("image_topic1",Image, queue_size = 1)
-
-    self.cam1_data= rospy.Publisher("cam1_data", Float64MultiArray, queue_size=10)
     # initialize a subscriber to recieve messages rom a topic named /robot/camera1/image_raw and use callback function to recieve data
     self.image_sub1 = rospy.Subscriber("/camera1/robot/image_raw",Image,self.callback1)
     # initialize the bridge between openCV and ROS
     self.bridge = CvBridge()
-    self.prev_target_pos =np.array([0.0,0.0], dtype='float64')
 
 
-
-
+  # Recieve data from camera 1, process it, and publish
   def callback1(self,data):
-      # Recieve the image
-      try:
-        self.cv_image1 = self.bridge.imgmsg_to_cv2(data, "bgr8")
-      except CvBridgeError as e:
-        print(e)
-      # Uncomment if you want to save the image
-      #cv2.imwrite('image_copy.png', cv_image)
-      # im2=cv2.imshow('window2', self.cv_image1)
-      cv2.waitKey(1)
+    # Recieve the image
+    try:
+      self.cv_image1 = self.bridge.imgmsg_to_cv2(data, "bgr8")
+    except CvBridgeError as e:
+      print(e)
+    
+    # Uncomment if you want to save the image
+    #cv2.imwrite('image_copy.png', cv_image)
 
-      res =lib.detect_red(self.cv_image1) + lib.detect_green(self.cv_image1)+ lib.detect_blue(self.cv_image1)+lib.detect_yellow(self.cv_image1)+ lib.detect_target(self.cv_image1)
-      tmp_res=Float64MultiArray()
-      tmp_res.data=res
-      if(len(res) !=10):
-        print("size should be 10")
-        quit(1)
-
-      # Publish the results
-      try: 
-        self.image_pub1.publish(self.bridge.cv2_to_imgmsg(self.cv_image1, "bgr8"))
-        self.cam1_data.publish(tmp_res)
-      except CvBridgeError as e:
-        print(e)
+    im1=cv2.imshow('window1', self.cv_image1)
+    cv2.waitKey(1)
+    # Publish the results
+    try: 
+      self.image_pub1.publish(self.bridge.cv2_to_imgmsg(self.cv_image1, "bgr8"))
+    except CvBridgeError as e:
+      print(e)
 
 # call the class
 def main(args):
