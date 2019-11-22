@@ -17,8 +17,9 @@ class RobotController3D():
 
     # Defines publisher and subscriber
     def __init__(self):
-        # initialize the node named image_processing
-        rospy.init_node('data_processing', anonymous=True)
+        # initialize the node named data
+        
+        rospy.init_node('cam_data_processing', anonymous=True)
         cam1_sub = message_filters.Subscriber("/cam1_data", Float64MultiArray)
         cam2_sub = message_filters.Subscriber("/cam2_data", Float64MultiArray)
         self.robot_joint1_pub = rospy.Publisher("/robot/joint1_position_controller/command", Float64, queue_size=10)
@@ -28,12 +29,11 @@ class RobotController3D():
         self.target_x_pub = rospy.Publisher("/target_pred_x", Float64, queue_size=10)
         self.target_y_pub = rospy.Publisher("/target_pred_y", Float64, queue_size=10)
         self.target_z_pub = rospy.Publisher("/target_pred_z", Float64, queue_size=10)
-        self.end_x_pub = rospy.Publisher("/end_x", Float64, queue_size=10)
-        self.end_y_pub = rospy.Publisher("/end_y", Float64, queue_size=10)
-        self.end_z_pub = rospy.Publisher("/end_z", Float64, queue_size=10)
-        # sync = message_filters.TimeSynchronizer([cam1_sub, cam2_sub], 2)
-        sync = message_filters.ApproximateTimeSynchronizer([cam1_sub, cam2_sub],5,0.1, allow_headerless=True)
-        sync.registerCallback(self.callback)
+        self.end_x_pub = rospy.Publisher("/end_effector_x", Float64, queue_size=10)
+        self.end_y_pub = rospy.Publisher("/end_effector_y", Float64, queue_size=10)
+        self.end_z_pub = rospy.Publisher("/end_effector_z", Float64, queue_size=10)
+        self.sync = message_filters.ApproximateTimeSynchronizer([cam1_sub, cam2_sub],5,0.1, allow_headerless=True)
+        self.sync.registerCallback(self.callback)
         self.bridge = CvBridge()
         self.time_previous_step = np.array([rospy.get_time()], dtype='float64') 
         self.error = np.array([0.0,0.0, 0.0], dtype='float64')  
@@ -43,10 +43,6 @@ class RobotController3D():
                                     [0.0, 0.0, 2.0],
                                     [0.0, 0.0, 5.0],
                                     [0.0, 0.0, 7.0]], dtype='float64')
-        self.prev_yellow_pos = np.array([0.0,0.0,0.0], dtype='float64')
-        self.prev_blue_pos = np.array([0.0,0.0,0.0], dtype='float64')
-        self.prev_green_pos = np.array([0.0,0.0,0.0], dtype='float64')
-        self.prev_red_pos = np.array([0.0,0.0,0.0], dtype='float64')
         self.pixel_to_meter = 0.037488286740304605
         self.YZ =np.array([
             [0,0],
@@ -63,19 +59,6 @@ class RobotController3D():
             [0,0],
             [0,0]
         ])
-        target_x = message_filters.Subscriber("/target/x_position_controller/command", Float64)
-        target_y = message_filters.Subscriber("/target/y_position_controller/command", Float64)
-        target_z = message_filters.Subscriber("/target/z_position_controller/command", Float64)
-        sync1 = message_filters.ApproximateTimeSynchronizer([target_x, target_y, target_z],5,0.1, allow_headerless=True)
-        sync1.registerCallback(self.callback2)
-        self.actual_sphere_x=1.0
-        self.actual_sphere_y=1.0
-        self.actual_sphere_z=1.0
-    
-    def callback2(self,x, y, z):
-        self.actual_sphere_x=x.data
-        self.actual_sphere_y=y.data
-        self.actual_sphere_z=z.data
 
 
     def detect_blue(self,imageXZ,imageYZ):
@@ -107,12 +90,8 @@ class RobotController3D():
         y = imageYZ[0]
         z = (imageXZ[1]+imageYZ[1])/2
 
-                
-
-        # result = self.pixel_to_meter * self.pos_normal(self.detect_yellow(self.XZ[3,:], self.YZ[3,:]),  [np.array([x, y,z])])
-        # result[0][2] =result[0][2]+1
-
-        result =self.pixel_to_meter * self.pos_normal(self.detect_yellow(self.XZ[3,:], self.YZ[3,:]),[np.array([self.actual_sphere_x,self.actual_sphere_y, self.actual_sphere_z])])
+        result = self.pixel_to_meter * self.pos_normal(self.detect_yellow(self.XZ[3,:], self.YZ[3,:]),  [np.array([x, y,z])])
+        result[0][2] =result[0][2]+1
 
         return result[0]
     
@@ -133,7 +112,7 @@ class RobotController3D():
 
     def detect_joints_pos(self):
         a = self.pixel_to_meter
-        print('a: ', a)
+        # print('a: ', a)
         joint_pos0 = self.detect_yellow(self.XZ[3,:], self.YZ[3,:])
         joint_pos1 = self.detect_blue(self.XZ[2,:], self.YZ[2,:])
         joint_pos2 = self.detect_green(self.XZ[1,:], self.YZ[1,:])
@@ -195,7 +174,7 @@ class RobotController3D():
     # Calculate the robot Jacobian
     def calculate_jacobian(self):
         FK = self.forward_kinematics()
-        joint_angles = self.detect_joint_angles()
+        joint_angles = self.joints_ang
         t1, t2, t3, t4 = sym.symbols('t1 t2 t3 t4')
         t = [t1, t2, t3, t4]
         jacobian = np.eye(3, 4)
@@ -230,19 +209,22 @@ class RobotController3D():
         return q_d
 
     def callback(self, cam1_data,cam2_data):
+        # recieves data corrected processed by each node handling cameras
+        # The data is 10 size array, each of the two represent both axes info
+        # reshapes in in the order of joints row index 0 being red joing and 3th index, yellow and last target
+        # [[red], [green], [blue], [yellow], [target_corridinates]]
         self.YZ = np.array(cam1_data.data).reshape(5,2)
         self.XZ = np.array(cam2_data.data).reshape(5,2)
 
-        target_pred = self.detect_target(self.XZ[4,:], self.YZ[4,:])
-        self.joints_pos = self.detect_joints_pos()
         end_effector =self.detect_end_effector()
+        target_pred = self.detect_target(self.XZ[4,:], self.YZ[4,:])
+        #get and update joint position
+        self.joints_pos = self.detect_joints_pos()
+        # takes integration each step and update joints_angles
         q_d= self.control_closed()
         self.joints_ang = q_d
 
         
-
-
-
         self.joint1=Float64()
         self.joint1.data= q_d[0]
         self.joint2=Float64()

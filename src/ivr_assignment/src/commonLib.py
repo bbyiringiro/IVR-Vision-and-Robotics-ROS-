@@ -25,11 +25,6 @@ def detect_blue(image):
     cx = int(M1['m10'] / M1['m00'])
     cy = int(M1['m01'] / M1['m00'])
 
-    # corr =(cx, cy)
-    # cv2.rectangle(image,corr, corr,255, 2)
-    # cv2.imshow("image",image)
-    # cv2.waitKey(0)
-
     return [cx, cy]
 
 def detect_yellow(image):
@@ -41,11 +36,6 @@ def detect_yellow(image):
     cx = int(M1['m10'] / M1['m00'])
     cy = int(M1['m01'] / M1['m00'])
 
-    # corr =(cx, cy)
-    # cv2.rectangle(image,corr, corr,255, 2)
-    # cv2.imshow("image",image)
-    # cv2.waitKey(0)
-
     return [cx, cy]
 
 def detect_green(image):
@@ -56,11 +46,6 @@ def detect_green(image):
     M1 = cv2.moments(mask)
     cx = int(M1['m10'] / M1['m00'])
     cy = int(M1['m01'] / M1['m00'])
-
-    # corr =(cx, cy)
-    # cv2.rectangle(image,corr, corr,255, 2)
-    # cv2.imshow("image",image)
-    # cv2.waitKey(0)
 
     return [cx, cy]
 
@@ -85,16 +70,13 @@ def detect_target(img):
 
     largestVal = 0
     largestLeft = 0
-    largestRight = 0
     largestShape = template_list[0].shape
     for tmp in template_list:
         result = cv2.matchTemplate(mask, tmp, cv2.TM_CCOEFF)
-        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+        _, max_val, _, max_loc = cv2.minMaxLoc(result)
         top_left = max_loc
-        bottom_right = (top_left[0] + tmp.shape[0], top_left[1] + tmp.shape[1])
         if(max_val>largestVal):
             largestLeft = top_left
-            largestRight = bottom_right
             largestVal = max_val
             largestShape = tmp.shape
             
@@ -102,15 +84,6 @@ def detect_target(img):
     cx,cy = largestLeft
     
     corridinate = [cx+int(largestShape[0]/2), cy+int(largestShape[1]/2)]
-    # a = (corridinate[0], corridinate[1])
-    # cv2.rectangle(img,a, largestRight,255, 2)
-    # img = cv2.cvtColor(img,cv2.COLOR_HSV2BGR)
-    # img[int((largestLeft[0]-largestRight[0])/2), int((largestLeft[1]-largestRight[1])/2)]= [0,0,255]
-    # img[int((largestLeft[0]-largestRight[0])/2)+1, int((largestLeft[1]-largestRight[1])/2)+1]= [0,0,255]
-    # img[int((largestLeft[0]-largestRight[0])/2)-1, int((largestLeft[1]-largestRight[1])/2)-1]= [0,0,255]
-    # cv2.imshow("image",img)
-    # cv2.waitKey(0)
-    # print(largestLeft)
 
     return corridinate
 
