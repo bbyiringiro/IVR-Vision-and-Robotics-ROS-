@@ -27,6 +27,7 @@ class image_converter:
     self.image_sub1 = rospy.Subscriber("/camera1/robot/image_raw",Image,self.callback1)
     # initialize the bridge between openCV and ROS
     self.bridge = CvBridge()
+    self.prev_target_pos =np.array([0.0,0.0], dtype='float64')
 
 
 

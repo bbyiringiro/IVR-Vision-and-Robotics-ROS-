@@ -28,6 +28,9 @@ class RobotController3D():
         self.target_x_pub = rospy.Publisher("/target_pred_x", Float64, queue_size=10)
         self.target_y_pub = rospy.Publisher("/target_pred_y", Float64, queue_size=10)
         self.target_z_pub = rospy.Publisher("/target_pred_z", Float64, queue_size=10)
+        self.end_x_pub = rospy.Publisher("/end_x", Float64, queue_size=10)
+        self.end_y_pub = rospy.Publisher("/end_y", Float64, queue_size=10)
+        self.end_z_pub = rospy.Publisher("/end_z", Float64, queue_size=10)
         # sync = message_filters.TimeSynchronizer([cam1_sub, cam2_sub], 2)
         sync = message_filters.ApproximateTimeSynchronizer([cam1_sub, cam2_sub],5,0.1, allow_headerless=True)
         sync.registerCallback(self.callback)
@@ -44,7 +47,6 @@ class RobotController3D():
         self.prev_blue_pos = np.array([0.0,0.0,0.0], dtype='float64')
         self.prev_green_pos = np.array([0.0,0.0,0.0], dtype='float64')
         self.prev_red_pos = np.array([0.0,0.0,0.0], dtype='float64')
-        self.prev_target_pos =np.array([0.0,0.0,0.0], dtype='float64')
         self.pixel_to_meter = 0.037488286740304605
         self.YZ =np.array([
             [0,0],
@@ -61,29 +63,6 @@ class RobotController3D():
             [0,0],
             [0,0]
         ])
-
-
-        # target_x = message_filters.Subscriber("/target/x_position_controller/command", Float64)
-        # target_y = message_filters.Subscriber("/target/y_position_controller/command", Float64)
-        # target_z = message_filters.Subscriber("/target/z_position_controller/command", Float64)
-        # target_x1 = message_filters.Subscriber("/target2/x2_position_controller/command", Float64)
-        # target_y2 = message_filters.Subscriber("/target2/y2_position_controller/command", Float64)
-        # target_z = message_filters.Subscriber("/target2/x2_position_controller/command", Float64)
-    #     sync1 = message_filters.ApproximateTimeSynchronizer([target_x, target_y, target_z],5,0.1, allow_headerless=True)
-    #     sync1.registerCallback(self.callback2)
-    #     self.actual_sphere_x=1.0
-    #     self.actual_sphere_y=1.0
-    #     self.actual_sphere_z=1.0
-    
-    # def callback2(self,x, y, z):
-    #     self.actual_sphere_x=x.data
-    #     self.actual_sphere_y=y.data
-    #     self.actual_sphere_z=z.data
-
-
-        
-
-        
 
 
     def detect_blue(self,imageXZ,imageYZ):
@@ -113,14 +92,14 @@ class RobotController3D():
     def detect_target(self, imageXZ, imageYZ):
         x = imageXZ[0]
         y = imageYZ[0]
-        z = imageXZ[1]+imageYZ[1]
+        z = (imageXZ[1]+imageYZ[1])/2
 
-        result = self.pixel_to_meter * (self.detect_yellow(self.XZ[3,:], self.YZ[3,:]) - np.array([x, y,z]))
-        result[0] =-1* result[0]
-        result[1] =-1* result[1]
-        result[2] = result[2]+15
+                
 
-        return result
+        result = self.pixel_to_meter * self.pos_normal(self.detect_yellow(self.XZ[3,:], self.YZ[3,:]),  [np.array([x, y,z])])
+        result[0][2] =result[0][2]+1
+
+        return result[0]
     
     def pixel2meter(self,imageXZ, imageYZ):
       # Obtain the centre of each coloured blob
@@ -149,12 +128,11 @@ class RobotController3D():
         return a * joints_pos
     
     # detect robot end-effector from the image
-    def detect_end_effector(self,imageXZ, imageYZ):
-        a = self.pixel2meter(imageXZ, imageYZ)
-        origin = self.detect_yellow(imageXZ, imageYZ)
-        end = self.detect_red(imageXZ, imageYZ)
+    def detect_end_effector(self):
+        a = self.pixel_to_meter
+        origin = self.detect_yellow(self.XZ[3,:], self.YZ[3,:])
+        end = self.detect_red(self.XZ[0,:], self.YZ[0,:])
         endPos = a * self.pos_normal(origin, [end])
-        print('end_pos: ', endPos[0])
         return endPos[0]
 
     def detect_joint_angles(self):
@@ -223,7 +201,7 @@ class RobotController3D():
         dt = cur_time - self.time_previous_step
         self.time_previous_step = cur_time
         # robot end-effector position
-        pos = self.detect_end_effector(imageXZ, imageYZ)
+        pos = self.detect_end_effector()
         # desired trajectory
         pos_d = self.detect_target(imageXZ, imageYZ) 
         # estimate derivative of error
@@ -254,7 +232,8 @@ class RobotController3D():
         # print(self.detect_target(self.cv_image1, self.cv_image2))
 
         target_pred = self.detect_target(self.XZ[4,:], self.YZ[4,:])
-        # print(self.detect_end_effector(self.cv_image1, self.cv_image2))
+        end_effector =self.detect_end_effector()
+
         # self.joints_pos = self.detect_joints_pos(self.cv_image1, self.cv_image2)
         # q_d = self.control_closed(self.cv_image1, self.cv_image2)
         # self.joints_ang = q_d
@@ -282,6 +261,9 @@ class RobotController3D():
             self.target_x_pub.publish(target_pred[0])
             self.target_y_pub.publish(target_pred[1])
             self.target_z_pub.publish(target_pred[2])
+            self.end_x_pub.publish(end_effector[0])
+            self.end_y_pub.publish(end_effector[1])
+            self.end_z_pub.publish(end_effector[2])
         except CvBridgeError as e:
             print(e)
     
