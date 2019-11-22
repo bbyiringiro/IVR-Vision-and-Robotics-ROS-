@@ -193,9 +193,9 @@ class RobotController3D():
 
     def control_closed(self,imageXZ, imageYZ):
         # P gain
-        K_p = np.array([[0.3,0,0],[0,0,0.3], [0,0,0.3]])
+        K_p = np.array([[0.3, 0.0, 0.0], [0.0, 0.4, 0.0], [0.0, 0.0, 0.3]])
         # D gain
-        K_d = np.array([[0.1,0,0.0],[0,0.1,0.0], [0,0.0,0.1]])
+        K_d = np.array([[0.002, 0.0, 0.0],[0.0, 0.002, 0.0], [0.0, 0.0, 0.001]])
         # estimate time step
         cur_time = np.array([rospy.get_time()])
         dt = cur_time - self.time_previous_step
