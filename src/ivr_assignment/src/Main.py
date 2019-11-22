@@ -232,11 +232,11 @@ class RobotController3D():
       dist = np.sum((circle1Pos - circle2Pos)**2)
       return 3 / np.sqrt(dist)
 
-    def pos_normal(orgin, joints_pos):
+    def pos_normal(self, origin, joints_pos):
         for joint in joints_pos:
             joint[0] = joint[0] - origin[0]
             joint[1] = joint[1] - origin[1]
-            joint[2] = orgin[2] - joint[2]
+            joint[2] = origin[2] - joint[2]
         return np.array(joints_pos)
 
     def detect_joints_pos(self, imageXZ, imageYZ):
@@ -256,8 +256,8 @@ class RobotController3D():
         origin = self.detect_yellow(imageXZ, imageYZ)
         end = self.detect_red(imageXZ, imageYZ)
         endPos = a * self.pos_normal(origin, [end])
-        print('end_pos: ', endPos)
-        return endPos
+        print('end_pos: ', endPos[0])
+        return endPos[0]
 
     def detect_joint_angles(self):
         def x2q_joint4(z, a, b, c):
