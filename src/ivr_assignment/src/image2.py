@@ -39,19 +39,17 @@ class image_converter:
     # im2=cv2.imshow('window2', self.cv_image2)
     cv2.waitKey(1)
 
-    res =[]
-    res.append(lib.detect_red(self.cv_image1))
-    res.append(lib.detect_green(self.cv_image1))
-    res.append(lib.detect_blue(self.cv_image1))
-    res.append(lib.detect_yellow(self.cv_image1))
-    res.append(lib.detect_target(self.cv_image1))
-    if(len(res) !=4):
-      print("size should be 4")
+    res =lib.detect_red(self.cv_image2) + lib.detect_green(self.cv_image2)+ lib.detect_blue(self.cv_image2)+lib.detect_yellow(self.cv_image2)+ lib.detect_target(self.cv_image2)
+    tmp_res=Float64MultiArray()
+    tmp_res.data=res
+    if(len(res) !=10):
+      print("size should be 10")
+      quit(1)
 
     # Publish the results
     try: 
       self.image_pub2.publish(self.bridge.cv2_to_imgmsg(self.cv_image2, "bgr8"))
-      self.cam2_data.publish(res)
+      self.cam2_data.publish(tmp_res)
     except CvBridgeError as e:
       print(e)
 

@@ -19,13 +19,17 @@ class RobotController3D():
     def __init__(self):
         # initialize the node named image_processing
         rospy.init_node('data_processing', anonymous=True)
-        cam1_sub = message_filters.Subscriber("cam1_data", Float64MultiArray)
-        cam2_sub = message_filters.Subscriber("cam2_data", Float64MultiArray)
+        cam1_sub = message_filters.Subscriber("/cam1_data", Float64MultiArray)
+        cam2_sub = message_filters.Subscriber("/cam2_data", Float64MultiArray)
         self.robot_joint1_pub = rospy.Publisher("/robot/joint1_position_controller/command", Float64, queue_size=10)
         self.robot_joint2_pub = rospy.Publisher("/robot/joint2_position_controller/command", Float64, queue_size=10)
         self.robot_joint3_pub = rospy.Publisher("/robot/joint3_position_controller/command", Float64, queue_size=10)
         self.robot_joint4_pub = rospy.Publisher("/robot/joint4_position_controller/command", Float64, queue_size=10)
-        sync = message_filters.TimeSynchronizer([cam1_sub, cam2_sub], 2)
+        self.target_x_pub = rospy.Publisher("/target_pred_x", Float64, queue_size=10)
+        self.target_y_pub = rospy.Publisher("/target_pred_y", Float64, queue_size=10)
+        self.target_z_pub = rospy.Publisher("/target_pred_z", Float64, queue_size=10)
+        # sync = message_filters.TimeSynchronizer([cam1_sub, cam2_sub], 2)
+        sync = message_filters.ApproximateTimeSynchronizer([cam1_sub, cam2_sub],5,0.1, allow_headerless=True)
         sync.registerCallback(self.callback)
         self.bridge = CvBridge()
         self.time_previous_step = np.array([rospy.get_time()], dtype='float64') 
@@ -41,6 +45,22 @@ class RobotController3D():
         self.prev_green_pos = np.array([0.0,0.0,0.0], dtype='float64')
         self.prev_red_pos = np.array([0.0,0.0,0.0], dtype='float64')
         self.prev_target_pos =np.array([0.0,0.0,0.0], dtype='float64')
+        self.pixel_to_meter = 0.037488286740304605
+        self.YZ =np.array([
+            [0,0],
+            [0,0],
+            [0,0],
+            [0,0],
+            [0,0]
+        ])
+
+        self.XZ =np.array([
+            [0,0],
+            [0,0],
+            [0,0],
+            [0,0],
+            [0,0]
+        ])
 
 
         # target_x = message_filters.Subscriber("/target/x_position_controller/command", Float64)
@@ -67,24 +87,39 @@ class RobotController3D():
 
 
     def detect_blue(self,imageXZ,imageYZ):
-        
+        cx = imageXZ[0]
+        cy = imageYZ[0]
+        cz = (imageXZ[1] + imageYZ[1])/2
         return np.array([cx, cy, cz])
 
     def detect_yellow(self,imageXZ,imageYZ):
-
+        cx = imageXZ[0]
+        cy = imageYZ[0]
+        cz = (imageXZ[1] + imageYZ[1])/2
         return np.array([cx, cy, cz])
 
     def detect_red(self,imageXZ,imageYZ):
-
+        cx = imageXZ[0]
+        cy = imageYZ[0]
+        cz = (imageXZ[1] + imageYZ[1])/2
         return np.array([cx, cy, cz])
 
     def detect_green(self,imageXZ,imageYZ):
-
+        cx = imageXZ[0]
+        cy = imageYZ[0]
+        cz = (imageXZ[1] + imageYZ[1])/2
         return np.array([cx, cy, cz])
 
     def detect_target(self, imageXZ, imageYZ):
-        
-        self.prev_target_pos = result
+        x = imageXZ[0]
+        y = imageYZ[0]
+        z = imageXZ[1]+imageYZ[1]
+
+        result = self.pixel_to_meter * (self.detect_yellow(self.XZ[3,:], self.YZ[3,:]) - np.array([x, y,z]))
+        result[0] =-1* result[0]
+        result[1] =-1* result[1]
+        result[2] = result[2]+15
+
         return result
     
     def pixel2meter(self,imageXZ, imageYZ):
@@ -202,11 +237,8 @@ class RobotController3D():
         return q_d
 
     def callback(self, cam1_data,cam2_data):
-        try:
-            self.cam1_data= self.bridge.imgmsg_to_cv2(cam1_data, "bgr8")
-            self.cam2_data = self.bridge.imgmsg_to_cv2(cam2_data, "bgr8")
-        except CvBridgeError as e:
-            print(e)
+        self.YZ = np.array(cam1_data.data).reshape(5,2)
+        self.XZ = np.array(cam2_data.data).reshape(5,2)
         # corr = self.detect_red(self.cv_image1, self.cv_image2)
         # print ("red: x {}, y {}, z {}".format(corr[0], corr[1], corr[2]))
 
@@ -221,7 +253,7 @@ class RobotController3D():
 
         # print(self.detect_target(self.cv_image1, self.cv_image2))
 
-        # print(self.detect_target(self.cv_image1, self.cv_image2))
+        target_pred = self.detect_target(self.XZ[4,:], self.YZ[4,:])
         # print(self.detect_end_effector(self.cv_image1, self.cv_image2))
         # self.joints_pos = self.detect_joints_pos(self.cv_image1, self.cv_image2)
         # q_d = self.control_closed(self.cv_image1, self.cv_image2)
@@ -247,6 +279,9 @@ class RobotController3D():
             # self.robot_joint2_pub.publish(self.joint2)
             # self.robot_joint3_pub.publish(self.joint3)
             # self.robot_joint4_pub.publish(self.joint4)
+            self.target_x_pub.publish(target_pred[0])
+            self.target_y_pub.publish(target_pred[1])
+            self.target_z_pub.publish(target_pred[2])
         except CvBridgeError as e:
             print(e)
     

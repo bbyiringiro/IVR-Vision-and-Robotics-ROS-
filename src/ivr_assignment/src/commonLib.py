@@ -13,7 +13,7 @@ def detect_red(image):
     cx = int(M1['m10'] / M1['m00'])
     cy = int(M1['m01'] / M1['m00'])
 
-    return np.array([cx, cy])
+    return [cx, cy]
 
 def detect_blue(image):
     
@@ -30,7 +30,7 @@ def detect_blue(image):
     # cv2.imshow("image",image)
     # cv2.waitKey(0)
 
-    return np.array([cx, cy])
+    return [cx, cy]
 
 def detect_yellow(image):
     mask = cv2.inRange(image, (0, 100, 100), (0, 255, 255))
@@ -46,7 +46,7 @@ def detect_yellow(image):
     # cv2.imshow("image",image)
     # cv2.waitKey(0)
 
-    return np.array([cx, cy])
+    return [cx, cy]
 
 def detect_green(image):
     mask = cv2.inRange(image, (0, 100, 0), (0, 255, 0))
@@ -62,7 +62,7 @@ def detect_green(image):
     # cv2.imshow("image",image)
     # cv2.waitKey(0)
 
-    return np.array([cx, cy])
+    return [cx, cy]
 
 def detect_target(img):
     lower_orange = np.array([10, 20, 0],np.uint8)
@@ -101,7 +101,7 @@ def detect_target(img):
 
     cx,cy = largestLeft
     
-    corridinate = np.array([cx+int(largestShape[0]/2), cy+int(largestShape[1]/2)])
+    corridinate = [cx+int(largestShape[0]/2), cy+int(largestShape[1]/2)]
     # a = (corridinate[0], corridinate[1])
     # cv2.rectangle(img,a, largestRight,255, 2)
     # img = cv2.cvtColor(img,cv2.COLOR_HSV2BGR)

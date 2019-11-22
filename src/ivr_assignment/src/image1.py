@@ -29,32 +29,32 @@ class image_converter:
     self.bridge = CvBridge()
 
 
-  # Recieve data from camera 1, process it, and publish
-  def callback1(self,data):
-    # Recieve the image
-    try:
-      self.cv_image1 = self.bridge.imgmsg_to_cv2(data, "bgr8")
-    except CvBridgeError as e:
-      print(e)
-    
-    res =[]
-    res.append(lib.detect_red(self.cv_image1))
-    res.append(lib.detect_green(self.cv_image1))
-    res.append(lib.detect_blue(self.cv_image1))
-    res.append(lib.detect_yellow(self.cv_image1))
-    res.append(lib.detect_target(self.cv_image1))
-    if(len(res) !=4):
-      print("size should be 4")
 
-    
-    # Publish the results
-    try: 
-      self.image_pub1.publish(self.bridge.cv2_to_imgmsg(self.cv_image1, "bgr8"))
-      self.cam1_data.publish(res)
-    except CvBridgeError as e:
-      print(e)
-    im1=cv2.imshow('window1', self.cv_image1)
-    cv2.waitKey(1)
+
+  def callback1(self,data):
+      # Recieve the image
+      try:
+        self.cv_image1 = self.bridge.imgmsg_to_cv2(data, "bgr8")
+      except CvBridgeError as e:
+        print(e)
+      # Uncomment if you want to save the image
+      #cv2.imwrite('image_copy.png', cv_image)
+      # im2=cv2.imshow('window2', self.cv_image1)
+      cv2.waitKey(1)
+
+      res =lib.detect_red(self.cv_image1) + lib.detect_green(self.cv_image1)+ lib.detect_blue(self.cv_image1)+lib.detect_yellow(self.cv_image1)+ lib.detect_target(self.cv_image1)
+      tmp_res=Float64MultiArray()
+      tmp_res.data=res
+      if(len(res) !=10):
+        print("size should be 10")
+        quit(1)
+
+      # Publish the results
+      try: 
+        self.image_pub1.publish(self.bridge.cv2_to_imgmsg(self.cv_image1, "bgr8"))
+        self.cam1_data.publish(tmp_res)
+      except CvBridgeError as e:
+        print(e)
 
 # call the class
 def main(args):
