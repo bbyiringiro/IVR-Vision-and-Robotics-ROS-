@@ -232,19 +232,31 @@ class RobotController3D():
       dist = np.sum((circle1Pos - circle2Pos)**2)
       return 3 / np.sqrt(dist)
 
+    def pos_normal(orgin, joints_pos):
+        for joint in joints_pos:
+            joint[0] = joint[0] - origin[0]
+            joint[1] = joint[1] - origin[1]
+            joint[2] = orgin[2] - joint[2]
+        return np.array(joints_pos)
+
     def detect_joints_pos(self, imageXZ, imageYZ):
         a = self.pixel2meter(imageXZ, imageYZ)
+        print('a: ', a)
         joint_pos0 = self.detect_yellow(imageXZ, imageYZ)
         joint_pos1 = self.detect_blue(imageXZ, imageYZ)
         joint_pos2 = self.detect_green(imageXZ, imageYZ)
         joint_pos3 = self.detect_red(imageXZ, imageYZ)
-        
-        return a*np.array([joint_pos0, joint_pos0 -joint_pos1, joint_pos0-joint_pos2, joint_pos0 - joint_pos3])
+        joints_pos = self.pos_normal(joint_pos0, [joint_pos0, joint_pos1, joint_pos2, joint_pos3])
+        print('joints_pos: ', joints_pos)
+        return a * joints_pos
     
     # detect robot end-effector from the image
     def detect_end_effector(self,imageXZ, imageYZ):
         a = self.pixel2meter(imageXZ, imageYZ)
-        endPos = a * (self.detect_yellow(imageXZ, imageYZ) - self.detect_red(imageXZ, imageYZ))
+        origin = self.detect_yellow(imageXZ, imageYZ)
+        end = self.detect_red(imageXZ, imageYZ)
+        endPos = a * self.pos_normal(origin, [end])
+        print('end_pos: ', endPos)
         return endPos
 
     def detect_joint_angles(self):
@@ -315,12 +327,12 @@ class RobotController3D():
         # robot end-effector position
         pos = self.detect_end_effector(imageXZ, imageYZ)
         # desired trajectory
-        pos_d= self.detect_target(imageXZ, imageYZ) 
+        pos_d = self.detect_target(imageXZ, imageYZ) 
         # estimate derivative of error
         self.error_d = ((pos_d - pos) - self.error)/dt
         # estimate error
-        self.error = pos_d-pos
-        q = self.detect_joint_angles() # estimate initial value of joints'
+        self.error = pos_d - pos
+        q = self.joints_ang 
         J_inv = np.linalg.pinv(self.calculate_jacobian(imageXZ, imageYZ))  # calculating the psudeo inverse of Jacobian
         dq_d =np.dot(J_inv, ( np.dot(K_d,self.error_d.transpose()) + np.dot(K_p,self.error.transpose()) ) )  # control input (angular velocity of joints)
         q_d = q + (dt * dq_d)  # control input (angular position of joints)
@@ -353,6 +365,7 @@ class RobotController3D():
         # print(self.detect_end_effector(self.cv_image1, self.cv_image2))
         self.joints_pos = self.detect_joints_pos(self.cv_image1, self.cv_image2)
         q_d = self.control_closed(self.cv_image1, self.cv_image2)
+        self.joints_ang = q_d
 
 
 
