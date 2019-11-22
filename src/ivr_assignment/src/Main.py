@@ -180,7 +180,7 @@ class RobotController3D():
     # Calculate the robot Jacobian
     def calculate_jacobian(self,imageXZ, imageYZ):
         FK = self.forward_kinematics()
-        joint_angles = self.detect_joint_angles()
+        joint_angles = self.joints_ang
         t1, t2, t3, t4 = sym.symbols('t1 t2 t3 t4')
         t = [t1, t2, t3, t4]
         jacobian = np.eye(3, 4)
@@ -233,6 +233,7 @@ class RobotController3D():
 
         target_pred = self.detect_target(self.XZ[4,:], self.YZ[4,:])
         end_effector =self.detect_end_effector()
+        self.joints_ang = q_d
 
         # self.joints_pos = self.detect_joints_pos(self.cv_image1, self.cv_image2)
         # q_d = self.control_closed(self.cv_image1, self.cv_image2)
